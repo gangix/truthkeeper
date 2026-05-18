@@ -1,7 +1,7 @@
 [project]
 name = "truthkeeper"
 version = "0.1.0"
-description = "Add your description here"
+description = "TruthKeeper backend — cross-system reconciliation agent for B2B operations."
 authors = [
     { name = "olcay.bilir", email = "olcay.bilir@digitalchargingsolutions.com" }
 ]
