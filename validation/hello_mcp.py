@@ -21,7 +21,7 @@ from mcp import StdioServerParameters
 load_dotenv(Path(__file__).parent / ".env")
 
 MODEL_ID = os.environ.get("GEMINI_MODEL_ID", "gemini-3.1-pro-preview")
-APP_NAME = "concordance-validation"
+APP_NAME = "truthkeeper-validation"
 USER_ID = "validator"
 SESSION_ID = "hello-mcp-session"
 
