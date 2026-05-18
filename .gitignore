@@ -29,6 +29,10 @@ build/
 .env.local
 .env.*.local
 
+# Private project notes (keep local, don't publish)
+PROJECT_BRIEF.md
+docs/
+
 # IDE
 .idea/
 .vscode/

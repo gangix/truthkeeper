@@ -21,10 +21,7 @@ Built for the [Building Agents for Real-World Challenges](https://buildwithai.de
 
 | Path | Purpose |
 |------|---------|
-| `PROJECT_BRIEF.md` | Original project brief (authoritative for unchanged sections) |
-| `docs/superpowers/specs/` | Design specs |
-| `docs/superpowers/plans/` | Implementation plans |
-| `validation/` | Throwaway scripts that prove integrations |
+| `validation/` | Throwaway scripts that prove the partner integration |
 | `backend/` | FastAPI + agent orchestration |
 | `frontend/` | Next.js UI |
 
@@ -47,6 +44,3 @@ End of Plan 1 (Foundation):
 
 MIT — see [LICENSE](LICENSE).
 
----
-
-*Originally drafted under the name Concordance — see commit history.*
