@@ -22,6 +22,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["seed"]
 
+[project.scripts]
+seed = "seed.orchestrator:main"
+seed-teardown = "seed.teardown:main"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
