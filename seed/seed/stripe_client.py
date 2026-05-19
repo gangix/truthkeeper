@@ -99,7 +99,12 @@ def _seed_one(c: SeedCustomer) -> None:
             stripe.Subscription.create(
                 customer=cust.id,
                 items=[{"price": price_id}],
-                # No trial in test mode by default; for the demo this is fine.
+                # send_invoice avoids the "no payment method" error in test mode —
+                # subscription + invoices are created but never auto-charged.
+                # Sufficient for our reconciliation rules, which only read
+                # subscription.status and invoice.status.
+                collection_method="send_invoice",
+                days_until_due=30,
                 metadata={"seed_id": c.seed_id},
             )
     elif p.subscription_status == "canceled":

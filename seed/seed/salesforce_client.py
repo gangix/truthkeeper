@@ -25,13 +25,19 @@ log = logging.getLogger(__name__)
 def _client() -> Salesforce:
     """Authenticate via OAuth Username-Password flow.
 
-    Falls back to legacy SOAP login if consumer_key/secret aren't configured.
+    Newer Agentforce orgs require an External Client App's consumer key +
+    secret + the user's username/password+security_token, called against the
+    org's My Domain. Falls back to legacy SOAP login if consumer credentials
+    aren't configured (works on older Developer Edition orgs).
     """
     s = get_settings()
 
     if s.sf_consumer_key and s.sf_consumer_secret:
         # OAuth Username-Password flow (required for orgs with SOAP disabled).
-        token_url = f"https://{s.sf_domain}.salesforce.com/services/oauth2/token"
+        # Newer Agentforce orgs require the org's My Domain URL — fall back to
+        # login.salesforce.com only when SF_LOGIN_HOST is not provided.
+        host = s.sf_login_host or f"{s.sf_domain}.salesforce.com"
+        token_url = f"https://{host}/services/oauth2/token"
         response = requests.post(
             token_url,
             data={

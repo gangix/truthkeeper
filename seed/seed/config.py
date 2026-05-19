@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     sf_domain: str = "login"
     sf_consumer_key: str | None = None
     sf_consumer_secret: str | None = None
+    # Override for orgs that require My Domain for OAuth (newer Agentforce orgs).
+    # Example: "orgfarm-abc123.develop.my.salesforce.com" (no scheme, no path).
+    sf_login_host: str | None = None
 
     stripe_secret_key: str
 

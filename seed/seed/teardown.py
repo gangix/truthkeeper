@@ -19,28 +19,24 @@ from hubspot.crm.contacts.exceptions import ApiException as HSException
 from simple_salesforce import Salesforce  # type: ignore[import-untyped]
 
 from seed.config import get_settings
-
-
-def _sf_client() -> Salesforce:
-    s = get_settings()
-    return Salesforce(
-        username=s.sf_username,
-        password=s.sf_password,
-        security_token=s.sf_security_token,
-        domain=s.sf_domain,
-    )
+from seed.salesforce_client import _client as _sf_client  # reuses the same auth path
 
 
 def teardown_salesforce(log: logging.Logger) -> None:
     sf = _sf_client()
-    contacts = sf.query("SELECT Id FROM Contact WHERE Description LIKE '[seed:%'")
+    # SOQL can't filter on Description (long text field), so we match on email
+    # pattern. All seeded contact emails end in .example or .example.com.
+    contacts = sf.query(
+        "SELECT Id, AccountId FROM Contact "
+        "WHERE Email LIKE '%.example' OR Email LIKE '%.example.com'"
+    )
+    account_ids = {r["AccountId"] for r in contacts["records"] if r["AccountId"]}
     for r in contacts["records"]:
         sf.Contact.delete(r["Id"])
-    accounts = sf.query("SELECT Id FROM Account WHERE Description LIKE '[seed:%'")
-    for r in accounts["records"]:
-        sf.Account.delete(r["Id"])
+    for aid in account_ids:
+        sf.Account.delete(aid)
     log.info("Salesforce: deleted %d contacts and %d accounts",
-             contacts["totalSize"], accounts["totalSize"])
+             contacts["totalSize"], len(account_ids))
 
 
 def teardown_stripe(log: logging.Logger) -> None:

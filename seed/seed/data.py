@@ -32,19 +32,19 @@ def _build_discrepancies(base: date) -> list[SeedCustomer]:
             company_name="Acme Corp",
             salesforce=SalesforcePresence(
                 account_name="Acme Corp",
-                contact_email="anna.chen@acme.example",
+                contact_email="anna.chen@acme.example.com",
                 status="Churned",
                 churn_date=base - timedelta(days=23),
             ),
             stripe=StripePresence(
-                customer_email="anna.chen@acme.example",
+                customer_email="anna.chen@acme.example.com",
                 subscription_status="active",
                 monthly_amount_eur=89,
                 last_invoice_date=base - timedelta(days=10),
                 invoice_history_months=3,  # 2 months billed AFTER churn
             ),
             hubspot=HubSpotPresence(
-                contact_email="anna.chen@acme.example",
+                contact_email="anna.chen@acme.example.com",
                 in_sequence="Engaged Trial",  # also wrong — should be removed
             ),
             discrepancy="D1_revenue_leak_missed_churn",
@@ -58,18 +58,18 @@ def _build_discrepancies(base: date) -> list[SeedCustomer]:
             company_name="Beta Industries",
             salesforce=SalesforcePresence(
                 account_name="Beta Industries",
-                contact_email="ben.park@beta.example",
+                contact_email="ben.park@beta.example.com",
                 status="Trial",  # WRONG — should be Paid Annual
             ),
             stripe=StripePresence(
-                customer_email="ben.park@beta.example",
+                customer_email="ben.park@beta.example.com",
                 subscription_status="active",
                 monthly_amount_eur=400,  # 4800/12
                 last_invoice_date=_last_friday(base),
                 invoice_history_months=1,
             ),
             hubspot=HubSpotPresence(
-                contact_email="ben.park@beta.example",
+                contact_email="ben.park@beta.example.com",
                 in_sequence="Engaged Trial",
             ),
             discrepancy="D2_trial_paid_but_sf_missed",
@@ -83,18 +83,18 @@ def _build_discrepancies(base: date) -> list[SeedCustomer]:
             company_name="Gamma LLC",
             salesforce=SalesforcePresence(
                 account_name="Gamma LLC",
-                contact_email="j.smith@gamma.example",  # short alias
+                contact_email="j.smith@gamma.example.com",  # short alias
                 status="Paid Annual",
             ),
             stripe=StripePresence(
-                customer_email="john.smith@gamma.example",  # canonical
+                customer_email="john.smith@gamma.example.com",  # canonical
                 subscription_status="active",
                 monthly_amount_eur=149,
                 last_invoice_date=base - timedelta(days=5),
                 invoice_history_months=4,
             ),
             hubspot=HubSpotPresence(
-                contact_email="john.smith@gamma.example",  # canonical
+                contact_email="john.smith@gamma.example.com",  # canonical
                 in_sequence="Paying Customer Onboarding",
             ),
             discrepancy="D3_identity_fracture",
@@ -108,11 +108,11 @@ def _build_discrepancies(base: date) -> list[SeedCustomer]:
             company_name="Delta Co",
             salesforce=SalesforcePresence(
                 account_name="Delta Co",
-                contact_email="diana.vega@delta.example",
+                contact_email="diana.vega@delta.example.com",
                 status="Churned",
             ),
             stripe=StripePresence(
-                customer_email="diana.vega@delta.example",
+                customer_email="diana.vega@delta.example.com",
                 subscription_status="canceled",
                 monthly_amount_eur=89,
                 last_invoice_date=base - timedelta(days=7),
@@ -120,7 +120,7 @@ def _build_discrepancies(base: date) -> list[SeedCustomer]:
                 invoice_history_months=2,
             ),
             hubspot=HubSpotPresence(
-                contact_email="diana.vega@delta.example",
+                contact_email="diana.vega@delta.example.com",
                 in_sequence="Paying Customer Onboarding",  # WRONG — should be Win Back
             ),
             discrepancy="D4_refunded_but_marketed",
@@ -134,14 +134,14 @@ def _build_discrepancies(base: date) -> list[SeedCustomer]:
             company_name="Epsilon Holdings",
             salesforce=None,  # NEVER created in Salesforce — that's the bug
             stripe=StripePresence(
-                customer_email="eric.olsen@epsilon.example",
+                customer_email="eric.olsen@epsilon.example.com",
                 subscription_status="active",
                 monthly_amount_eur=199,
                 last_invoice_date=base - timedelta(days=3),
                 invoice_history_months=6,
             ),
             hubspot=HubSpotPresence(
-                contact_email="eric.olsen@epsilon.example",
+                contact_email="eric.olsen@epsilon.example.com",
                 in_sequence="Paying Customer Onboarding",
             ),
             discrepancy="D5_orphaned_stripe_customer",
@@ -166,7 +166,7 @@ def _build_normals(base: date) -> list[SeedCustomer]:
     out: list[SeedCustomer] = []
     for i, first in enumerate(_NORMAL_FIRST):
         company = f"{first} Industries"
-        email = f"{first.lower()}@{company.lower().replace(' ', '')}.example"
+        email = f"{first.lower()}@{company.lower().replace(' ', '')}.example.com"
         status = "Paid Annual" if i % 2 == 0 else "Trial"
         sub_status = "active" if i % 2 == 0 else "trialing"
         sequence = "Paying Customer Onboarding" if i % 2 == 0 else "Engaged Trial"
