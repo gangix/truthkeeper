@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     sf_password: str
     sf_security_token: str
     sf_domain: str = "login"
+    sf_consumer_key: str | None = None
+    sf_consumer_secret: str | None = None
 
     stripe_secret_key: str
 

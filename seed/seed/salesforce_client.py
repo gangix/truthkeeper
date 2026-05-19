@@ -1,14 +1,19 @@
 """Salesforce Developer Edition seeder.
 
-Idempotency strategy: query by Account.Name; if exists, update fields;
-otherwise create. Contacts are upserted by Email. We do NOT delete records
-this seeder doesn't recognize — teardown is in teardown.py.
+Auth: OAuth Username-Password flow via an External Client App.
+Newer Agentforce orgs disable SOAP API login by default, so we authenticate
+through the OAuth /services/oauth2/token endpoint using a Connected App's
+consumer key + secret plus the user's username/password+security_token.
+
+Idempotency: query by Account.Name; if exists, update fields; otherwise
+create. Contacts are upserted by Email. teardown.py handles deletes.
 """
 
 from __future__ import annotations
 
 import logging
 
+import requests
 from simple_salesforce import Salesforce  # type: ignore[import-untyped]
 
 from seed.config import get_settings
@@ -18,7 +23,35 @@ log = logging.getLogger(__name__)
 
 
 def _client() -> Salesforce:
+    """Authenticate via OAuth Username-Password flow.
+
+    Falls back to legacy SOAP login if consumer_key/secret aren't configured.
+    """
     s = get_settings()
+
+    if s.sf_consumer_key and s.sf_consumer_secret:
+        # OAuth Username-Password flow (required for orgs with SOAP disabled).
+        token_url = f"https://{s.sf_domain}.salesforce.com/services/oauth2/token"
+        response = requests.post(
+            token_url,
+            data={
+                "grant_type": "password",
+                "client_id": s.sf_consumer_key,
+                "client_secret": s.sf_consumer_secret,
+                "username": s.sf_username,
+                # Password and security token are concatenated for this flow.
+                "password": f"{s.sf_password}{s.sf_security_token}",
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return Salesforce(
+            instance_url=payload["instance_url"],
+            session_id=payload["access_token"],
+        )
+
+    # Legacy SOAP path — works on older orgs where SOAP API login is enabled.
     return Salesforce(
         username=s.sf_username,
         password=s.sf_password,

@@ -607,6 +607,7 @@ dependencies = [
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
+    { name = "requests" },
     { name = "simple-salesforce" },
     { name = "stripe" },
 ]
@@ -622,6 +623,7 @@ requires-dist = [
     { name = "pydantic", extras = ["email"], specifier = ">=2.13.4" },
     { name = "pydantic-settings", specifier = ">=2.14.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "requests", specifier = ">=2.34.2" },
     { name = "simple-salesforce", specifier = ">=1.12.9" },
     { name = "stripe", specifier = ">=15.1.0" },
 ]
