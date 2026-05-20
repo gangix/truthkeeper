@@ -8,8 +8,13 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.136.1",
+    "google-adk>=1.33.0",
+    "google-cloud-aiplatform>=1.153.1",
+    "google-cloud-bigquery>=3.27.0",
+    "mcp>=1.27.1",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
+    "python-dotenv>=1.2.2",
     "uvicorn[standard]>=0.47.0",
 ]
 
