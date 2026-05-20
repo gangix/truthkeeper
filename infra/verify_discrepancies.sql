@@ -14,14 +14,15 @@
 -- Status:
 -- - HubSpot connector: ACTIVE, syncing to dataset `hubspot` -- rules using HubSpot work today
 -- - Salesforce connector: ACTIVE, syncing to dataset `salesforce` (account 111 rows, contact 118 rows; ~98 seeded each + SF DE sample data)
--- - Stripe Test connector: HISTORICAL SYNC STUCK at 97/98 tables. `stripe.subscription` table NOT yet in BigQuery.
---   D1 and D2 will start passing the moment the Stripe sync unblocks; their SQL is correct as written.
+-- - Stripe Test connector: ACTIVE, syncing to dataset `stripe` (scope trimmed to ~16 tables; 89 disabled).
+--   IMPORTANT: Fivetran's Stripe connector does NOT produce a flat `subscription` table.
+--   Subscription data lives in `stripe.subscription_history` (Fivetran history mode).
+--   D1 and D2 below query that table and filter `_fivetran_active = TRUE` for current state.
 
 -- ────────────────────────────────────────────────────────────────────────
 -- D1: Revenue leak -- Stripe sub still active for an SF Account marked Churned
 -- Expected: 1 row (Anna Chen / Acme Corp)
--- NEEDS: salesforce.account, salesforce.contact, stripe.customer, stripe.subscription
--- Currently fails: stripe.subscription not yet synced.
+-- NEEDS: salesforce.account, salesforce.contact, stripe.customer, stripe.subscription_history
 -- ────────────────────────────────────────────────────────────────────────
 SELECT
   sf_a.name        AS account_name,
@@ -32,8 +33,9 @@ JOIN `truthkeeper-hack-2026.salesforce.contact` sf_c
   ON sf_c.account_id = sf_a.id
 JOIN `truthkeeper-hack-2026.stripe.customer` s_cust
   ON LOWER(s_cust.email) = LOWER(sf_c.email)
-JOIN `truthkeeper-hack-2026.stripe.subscription` s_sub
+JOIN `truthkeeper-hack-2026.stripe.subscription_history` s_sub
   ON s_sub.customer_id = s_cust.id
+ AND s_sub._fivetran_active = TRUE
 WHERE sf_a.description LIKE '%[seed:%'
   AND sf_c.description LIKE '%status=Churned%'
   AND s_sub.status IN ('active', 'trialing', 'past_due')
@@ -42,7 +44,6 @@ WHERE sf_a.description LIKE '%[seed:%'
 -- ────────────────────────────────────────────────────────────────────────
 -- D2: Trial in SF but paid in Stripe
 -- Expected: 1 row (Ben Park / Beta Industries)
--- Currently fails: stripe.subscription not yet synced.
 -- ────────────────────────────────────────────────────────────────────────
 SELECT
   sf_c.email     AS contact_email,
@@ -52,8 +53,9 @@ SELECT
 FROM `truthkeeper-hack-2026.salesforce.contact` sf_c
 JOIN `truthkeeper-hack-2026.stripe.customer` s_cust
   ON LOWER(s_cust.email) = LOWER(sf_c.email)
-JOIN `truthkeeper-hack-2026.stripe.subscription` s_sub
+JOIN `truthkeeper-hack-2026.stripe.subscription_history` s_sub
   ON s_sub.customer_id = s_cust.id
+ AND s_sub._fivetran_active = TRUE
 LEFT JOIN `truthkeeper-hack-2026.stripe.invoice` s_inv
   ON s_inv.subscription_id = s_sub.id
 WHERE sf_c.description LIKE '%status=Trial%'

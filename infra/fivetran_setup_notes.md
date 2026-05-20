@@ -52,11 +52,13 @@ Fix via a Permission Set (one-time):
 3. Destination: `truthkeeper_bq`
 4. Destination schema: `stripe`
 5. Auth: paste your `sk_test_...` secret key
-6. Tables (minimum for demo): `customer`, `subscription`, `invoice`, `refund`, `charge`
+6. Tables (minimum for demo): `customer`, `subscription_history`, `invoice`, `refund`, `charge`. See subscription note below.
 7. Schedule: every 15 minutes
 8. Initial sync starts
 
-> **Known issue (2026-05-20):** the historical sync has been stuck at 97/98 tables for several hours; `stripe.subscription` has not yet landed. Discrepancies D1 and D2 require this table — they'll start passing the moment Stripe completes. Investigate via Fivetran connector logs.
+> **Subscriptions are exposed via history-mode only.** Fivetran's Stripe connector does *not* produce a flat `subscription` table — subscription state lives in `subscription_history`, with one row per state change. The demo's D1/D2 queries filter `_fivetran_active = TRUE` to pick the current row per subscription. If a table named `subscription` is missing from the schema picker, that's expected; enable `subscription_history` instead.
+
+> **Recommended scoping (2026-05-20):** the connector's full default scope is ~105 tables and historical syncs can stall for hours on the unused ones. We trimmed to ~16 enabled tables (`customer`, `charge`, `invoice` + invoice subtables, `refund`, `subscription_history`, `subscription_item`, `subscription_discount`, `customer_discount`, `customer_tax`). Disabling the rest cleared the stall.
 
 ## 4. Source: HubSpot
 
