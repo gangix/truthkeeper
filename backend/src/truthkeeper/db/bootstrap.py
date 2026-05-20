@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from truthkeeper.db.models import Base, Company, Spec
 from truthkeeper.db.session import get_engine, get_sessionmaker
@@ -44,5 +45,12 @@ async def init_db() -> None:
                 agent_run_id=None,
             )
         )
-        await session.commit()
-        logger.info("init_db: seeded DEMO_SPEC for %s", DEMO_SPEC.company_id)
+        try:
+            await session.commit()
+            logger.info("init_db: seeded DEMO_SPEC for %s", DEMO_SPEC.company_id)
+        except IntegrityError:
+            await session.rollback()
+            logger.warning(
+                "init_db: concurrent seed detected for %s, skipping",
+                DEMO_SPEC.company_id,
+            )

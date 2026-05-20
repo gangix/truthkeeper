@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,7 +42,16 @@ async def _require_spec(company_id: str, session: AsyncSession) -> CompanyAgentS
             status_code=404,
             detail=f"No CompanyAgentSpec persisted for company_id={company_id!r}",
         )
-    return CompanyAgentSpec.model_validate(row.spec_json)
+    try:
+        return CompanyAgentSpec.model_validate(row.spec_json)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Spec for company_id={company_id!r} failed validation: "
+                f"{exc.error_count()} error(s)"
+            ),
+        ) from exc
 
 
 @router.get("/{company_id}/spec", response_model=CompanyAgentSpec)
