@@ -11,6 +11,7 @@ when we want sync-freshness checks.
 from __future__ import annotations
 
 import json
+import os
 import re
 from typing import Any
 
@@ -27,7 +28,15 @@ from truthkeeper.spec.models import (
     Rule,
 )
 
-_DEFAULT_MODEL = "gemini-3.1-pro-preview"
+# Local dev (via ADC) typically uses gemini-3.1-pro-preview because the
+# developer's account is allowlisted; on Cloud Run the Compute service
+# account is not, so set GEMINI_MODEL_ID to a GA model in deploy config.
+# Resolved at call time, not import time, so load_runtime_env() effects apply.
+_FALLBACK_MODEL = "gemini-3.1-pro-preview"
+
+
+def _resolve_model_id() -> str:
+    return os.environ.get("GEMINI_MODEL_ID", _FALLBACK_MODEL)
 _APP_NAME = "truthkeeper-reconcile"
 _USER_ID = "agent"
 
@@ -153,11 +162,12 @@ async def reason_about_violation(
     violation: dict[str, Any],
     spec: CompanyAgentSpec,
     *,
-    model: str = _DEFAULT_MODEL,
+    model: str | None = None,
 ) -> ReasoningOutput:
+    resolved_model = model or _resolve_model_id()
     agent = LlmAgent(
         name=f"reasoner_{rule.id.lower()}",
-        model=model,
+        model=resolved_model,
         description=f"Per-violation reasoning agent for rule {rule.id}.",
         instruction=_STATIC_INSTRUCTION,
         output_schema=ReasoningOutput,
