@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from truthkeeper.api import companies_router
 from truthkeeper.health import router as health_router
 
 app = FastAPI(
@@ -18,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(companies_router)
 
 
 @app.get("/")
