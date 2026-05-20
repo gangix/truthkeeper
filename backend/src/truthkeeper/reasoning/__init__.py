@@ -6,6 +6,26 @@ The architecture (PROJECT_BRIEF.md §4):
      explain the disagreement and draft cross-system corrective actions.
 """
 
-from truthkeeper.reasoning.output import DraftedAction, ReasoningOutput
+from truthkeeper.reasoning.agent import (
+    reason_about_violation,
+    resolve_action_parameters,
+)
+from truthkeeper.reasoning.orchestrator import reconcile_all_rules
+from truthkeeper.reasoning.output import (
+    DraftedAction,
+    ReasoningOutput,
+    ReconciliationReport,
+    RuleReconciliation,
+    ViolationReasoning,
+)
 
-__all__ = ["DraftedAction", "ReasoningOutput"]
+__all__ = [
+    "DraftedAction",
+    "ReasoningOutput",
+    "ReconciliationReport",
+    "RuleReconciliation",
+    "ViolationReasoning",
+    "reason_about_violation",
+    "reconcile_all_rules",
+    "resolve_action_parameters",
+]

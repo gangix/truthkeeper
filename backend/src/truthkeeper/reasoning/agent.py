@@ -19,8 +19,13 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from truthkeeper.reasoning.output import ReasoningOutput
-from truthkeeper.spec.models import CompanyAgentSpec, EntityModel, Rule
+from truthkeeper.reasoning.output import DraftedAction, ReasoningOutput
+from truthkeeper.spec.models import (
+    CompanyAgentSpec,
+    CorrectiveActionTemplate,
+    EntityModel,
+    Rule,
+)
 
 _DEFAULT_MODEL = "gemini-3.1-pro-preview"
 _APP_NAME = "truthkeeper-reconcile"
@@ -42,27 +47,57 @@ _STATIC_INSTRUCTION = (
     "You are TruthKeeper, a cross-system reconciliation agent. "
     "For each violation, produce a ReasoningOutput JSON object that explains the "
     "disagreement in plain language using the company's vocabulary, names the most "
-    "likely root cause, estimates monetary impact when applicable, and drafts the "
-    "cross-system corrective actions a human can approve.\n\n"
-    "Rules for drafted_actions:\n"
-    "  * For each corrective action template, emit one DraftedAction.\n"
-    "  * The `parameters` field MUST be populated. Take the action template's "
-    "`parameter_mapping`: each key is the parameter name, each value is either "
-    "a column name in the violation row or a literal value. Resolve each entry "
-    "to its actual value (looking it up in the violation row if it matches a "
-    "column name; otherwise pass the literal through unchanged). Never return "
-    "an empty `parameters` dict.\n"
-    "  * The `description` field MUST be a concrete human preview with the "
-    "actual values substituted in (not column names).\n\n"
-    "Worked example: if a corrective action template has "
-    'parameter_mapping={"subscription_id": "stripe_subscription_id", '
-    '"reason": "Salesforce marked Churned"} and the violation row has '
-    'stripe_subscription_id="sub_ABC", then the DraftedAction must be '
-    '{"target_system": "stripe", "action_type": "cancel_subscription", '
-    '"parameters": {"subscription_id": "sub_ABC", '
-    '"reason": "Salesforce marked Churned"}, '
-    '"description": "Cancel Stripe subscription sub_ABC"}.'
+    "likely root cause, estimates monetary impact when applicable, and drafts one "
+    "DraftedAction per corrective action template provided.\n\n"
+    "Concentrate your effort on `explanation`, `likely_cause`, and the monetary "
+    "impact fields. Each DraftedAction's `description` MUST read as a concrete "
+    "human preview with the actual values from the violation row substituted in "
+    "(not column names). You may leave `parameters` empty — the system fills "
+    "those in deterministically from the rule's parameter_mapping."
 )
+
+
+def resolve_action_parameters(
+    template: CorrectiveActionTemplate,
+    violation: dict[str, Any],
+) -> dict[str, str]:
+    """Deterministically resolve a template's parameter_mapping against a row.
+
+    Each value in `parameter_mapping` is either a column name in the violation
+    row (look it up) or a literal (pass through). This avoids relying on Gemini
+    for dict lookups — Gemini is unreliable there and the substitution is
+    fully deterministic from the spec.
+    """
+    resolved: dict[str, str] = {}
+    for param_name, mapping_value in template.parameter_mapping.items():
+        if mapping_value in violation:
+            value = violation[mapping_value]
+            resolved[param_name] = "" if value is None else str(value)
+        else:
+            resolved[param_name] = mapping_value
+    return resolved
+
+
+def _backfill_parameters(
+    output: ReasoningOutput,
+    rule: Rule,
+    violation: dict[str, Any],
+) -> ReasoningOutput:
+    templates_by_type = {
+        t.action_type: t for t in rule.corrective_action_templates
+    }
+    fixed: list[DraftedAction] = []
+    for action in output.drafted_actions:
+        template = templates_by_type.get(action.action_type)
+        if template is None:
+            fixed.append(action)
+            continue
+        resolved = resolve_action_parameters(template, violation)
+        # Deterministic resolution overrides Gemini's params for known keys,
+        # but Gemini-added extras (keys not in the template) are preserved.
+        merged = {**action.parameters, **resolved}
+        fixed.append(action.model_copy(update={"parameters": merged}))
+    return output.model_copy(update={"drafted_actions": fixed})
 
 
 def _build_user_message(
@@ -83,7 +118,7 @@ def _build_user_message(
             "Reasoning instructions for this rule (placeholder tokens like `{column_name}` refer to fields in the violation row below — substitute the actual values when you write the explanation):",
             rule.reasoning_template,
             "",
-            "Corrective action templates available for this rule. Each parameter_mapping value names a column in the violation row; replace it with the actual value when filling the action's parameters (JSON):",
+            "Corrective action templates available for this rule. Emit one DraftedAction per template, mirroring its `action_type` and `target_system` and writing a concrete human-readable description (JSON):",
             json.dumps(
                 [a.model_dump() for a in rule.corrective_action_templates],
                 indent=2,
@@ -152,4 +187,5 @@ async def reason_about_violation(
     if not final_text:
         raise RuntimeError(f"Agent for rule {rule.id} produced no final response")
 
-    return _parse_final_text(final_text)
+    parsed = _parse_final_text(final_text)
+    return _backfill_parameters(parsed, rule, violation)

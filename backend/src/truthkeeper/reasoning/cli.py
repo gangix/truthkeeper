@@ -1,8 +1,9 @@
-"""Run one rule's reconciliation reasoning loop against DEMO_SPEC.
+"""Run reconciliation reasoning against DEMO_SPEC.
 
 Usage:
   cd backend && uv run python -m truthkeeper.reasoning.cli D1
   cd backend && uv run python -m truthkeeper.reasoning.cli D1 --max-violations 1
+  cd backend && uv run python -m truthkeeper.reasoning.cli all --max-violations 1
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from dotenv import load_dotenv
 
 from truthkeeper.reasoning.agent import reason_about_violation
 from truthkeeper.reasoning.bigquery import execute_rule_sql
+from truthkeeper.reasoning.orchestrator import reconcile_all_rules
 from truthkeeper.spec.demo import DEMO_SPEC
 
 
@@ -35,18 +37,43 @@ def _load_env() -> None:
 
 async def _amain() -> int:
     parser = argparse.ArgumentParser(
-        description="Reconcile one rule from DEMO_SPEC end-to-end (BigQuery + Gemini)."
+        description=(
+            "Reconcile one rule or every rule from DEMO_SPEC end-to-end "
+            "(BigQuery + Gemini)."
+        )
     )
-    parser.add_argument("rule_id", help="Rule ID, e.g. D1")
+    parser.add_argument(
+        "rule_id",
+        help="Rule ID (e.g. D1) or the literal 'all' to reconcile every rule.",
+    )
     parser.add_argument(
         "--max-violations",
         type=int,
         default=3,
-        help="Cap how many violations get reasoned about (default 3, cost control).",
+        help="Cap how many violations get reasoned about per rule (cost control).",
     )
     args = parser.parse_args()
 
     _load_env()
+
+    if args.rule_id.lower() == "all":
+        print(
+            f"Reconciling all {len(DEMO_SPEC.rules)} rules for "
+            f"{DEMO_SPEC.company_name}...",
+            file=sys.stderr,
+        )
+        report = await reconcile_all_rules(
+            spec=DEMO_SPEC, max_violations_per_rule=args.max_violations
+        )
+        print(report.model_dump_json(indent=2))
+        for rule in report.rules:
+            print(
+                f"  {rule.rule_id} [{rule.severity.value}] "
+                f"{rule.violation_count} violation(s), "
+                f"{rule.sampled_count} reasoned",
+                file=sys.stderr,
+            )
+        return 0
 
     rule = next((r for r in DEMO_SPEC.rules if r.id == args.rule_id), None)
     if rule is None:

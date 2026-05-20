@@ -1,14 +1,18 @@
-"""Structured output Gemini must produce per violation.
+"""Structured output Gemini must produce per violation, plus aggregate types.
 
-Bound to the agent via ADK's `output_schema`. Gemini sees this as a JSON
-schema and emits matching JSON; we parse it back into Pydantic.
+ReasoningOutput is bound to the agent via ADK's `output_schema` — Gemini sees
+it as a JSON schema and emits matching JSON. The aggregate types
+(ViolationReasoning / RuleReconciliation / ReconciliationReport) wrap the
+agent output with the violation row and rule metadata for downstream UI/API use.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
-from truthkeeper.spec.models import SystemName
+from truthkeeper.spec.models import Severity, SystemName
 
 
 class DraftedAction(BaseModel):
@@ -68,3 +72,41 @@ class ReasoningOutput(BaseModel):
             "approval. Each must be ready to execute once approved."
         ),
     )
+
+
+class ViolationReasoning(BaseModel):
+    """One violation row paired with the agent's reasoning about it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    violation: dict[str, Any] = Field(
+        description="The original violation row from BigQuery (JSON-friendly)."
+    )
+    reasoning: ReasoningOutput
+
+
+class RuleReconciliation(BaseModel):
+    """Aggregate result for one rule's reconciliation pass."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rule_id: str
+    rule_name: str
+    severity: Severity
+    violation_count: int = Field(
+        description="Total violations the SQL returned, before sampling."
+    )
+    sampled_count: int = Field(
+        description="How many violations were actually sent to Gemini."
+    )
+    violations: list[ViolationReasoning]
+
+
+class ReconciliationReport(BaseModel):
+    """One full reconciliation pass over every rule in the spec."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company_id: str
+    company_name: str
+    rules: list[RuleReconciliation]

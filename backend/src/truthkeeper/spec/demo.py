@@ -181,13 +181,24 @@ VOCABULARY = Vocabulary(
 
 
 D1_SQL = f"""
+WITH latest_invoice_per_subscription AS (
+  SELECT
+    subscription_id,
+    ARRAY_AGG(STRUCT(total, created) ORDER BY created DESC LIMIT 1)[OFFSET(0)] AS latest
+  FROM {_bq("stripe", "invoice")}
+  WHERE subscription_id IS NOT NULL
+  GROUP BY subscription_id
+)
 SELECT
-  sf_a.name        AS account_name,
-  sf_c.email       AS contact_email,
-  s_sub.status     AS stripe_subscription_status,
-  s_sub.id         AS stripe_subscription_id,
-  s_cust.id        AS stripe_customer_id,
-  sf_a.id          AS salesforce_account_id
+  sf_a.name                       AS account_name,
+  sf_c.email                      AS contact_email,
+  s_sub.status                    AS stripe_subscription_status,
+  s_sub.id                        AS stripe_subscription_id,
+  s_cust.id                       AS stripe_customer_id,
+  sf_a.id                         AS salesforce_account_id,
+  s_sub.billing                   AS stripe_billing_mode,
+  liv.latest.total                AS recent_invoice_total_cents,
+  liv.latest.created              AS recent_invoice_created_at
 FROM {_bq("salesforce", "account")} sf_a
 JOIN {_bq("salesforce", "contact")} sf_c
   ON sf_c.account_id = sf_a.id
@@ -196,6 +207,8 @@ JOIN {_bq("stripe", "customer")} s_cust
 JOIN {_bq("stripe", "subscription_history")} s_sub
   ON s_sub.customer_id = s_cust.id
  AND s_sub._fivetran_active = TRUE
+LEFT JOIN latest_invoice_per_subscription liv
+  ON liv.subscription_id = s_sub.id
 WHERE sf_a.description LIKE '%[seed:%'
   AND sf_c.description LIKE '%status=Churned%'
   AND s_sub.status IN ('active', 'trialing', 'past_due')
