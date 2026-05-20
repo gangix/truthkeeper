@@ -79,6 +79,7 @@ async def main() -> None:
 
     print(f"\n>>> Prompt: {prompt}\n")
     final_text: str | None = None
+    tool_was_called = False
     async for event in runner.run_async(
         user_id=USER_ID, session_id=SESSION_ID, new_message=content
     ):
@@ -86,18 +87,30 @@ async def main() -> None:
         if event.is_final_response() and event.content and event.content.parts:
             text = event.content.parts[0].text
             print(f"  [{author} final] {text[:200]}")
-            final_text = text
+            if author == "summarizer":
+                final_text = text
         elif event.content and event.content.parts:
             for part in event.content.parts:
                 if part.function_call:
                     print(f"  [{author} call] {part.function_call.name}({part.function_call.args})")
+                    if part.function_call.name == "list_fruits":
+                        tool_was_called = True
                 elif part.function_response:
                     print(f"  [{author} result] {part.function_response.name} -> (truncated)")
+
+    if not tool_was_called:
+        raise SystemExit("ERROR: collector did not invoke list_fruits — tool routing is broken")
 
     if not final_text:
         raise SystemExit("ERROR: no final response from pipeline")
 
-    parsed = FruitSummary.model_validate_json(final_text)
+    try:
+        parsed = FruitSummary.model_validate_json(final_text)
+    except Exception as exc:
+        raise SystemExit(
+            f"ERROR: summarizer output did not parse as FruitSummary: {exc}\n"
+            f"Raw text: {final_text!r}"
+        ) from None
     print(f"\n<<< Parsed FruitSummary: {parsed.model_dump_json(indent=2)}")
 
 
