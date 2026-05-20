@@ -88,6 +88,13 @@ def _build_synthesis_instruction() -> str:
             }
         )
     pinned_rules_json = json.dumps(pinned_rules, indent=2)
+    # DEMO_SPEC.rules.reasoning_template contains literal `{column_name}` style
+    # placeholders that are resolved at reconcile time, not by ADK's instruction
+    # templating. Double the braces so ADK's format() pass treats them as
+    # literal characters; the doubled braces collapse back to single in the
+    # final prompt the LLM sees, and Gemini emits them unchanged into the
+    # proposal's reasoning_template field — where reconcile expects them.
+    pinned_rules_json = pinned_rules_json.replace("{", "{{").replace("}", "}}")
 
     return f"""\
 You are the Synthesis sub-agent for TruthKeeper onboarding.
