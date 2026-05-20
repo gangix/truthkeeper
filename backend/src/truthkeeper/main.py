@@ -14,6 +14,16 @@ load_runtime_env()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db()
+    try:
+        from truthkeeper.onboarding.mcp_tools import build_fivetran_toolset
+
+        build_fivetran_toolset()
+    except Exception as exc:  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "MCP warmup skipped: %s. Onboarding will fail until env is fixed.", exc
+        )
     yield
 
 
