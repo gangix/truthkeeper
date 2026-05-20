@@ -11,28 +11,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import sys
-from pathlib import Path
 
-from dotenv import load_dotenv
-
+from truthkeeper.config import load_runtime_env
 from truthkeeper.reasoning.agent import reason_about_violation
 from truthkeeper.reasoning.bigquery import execute_rule_sql
 from truthkeeper.reasoning.orchestrator import reconcile_all_rules
 from truthkeeper.spec.demo import DEMO_SPEC
-
-
-def _load_env() -> None:
-    repo_root = Path(__file__).resolve().parents[4]
-    candidates = [repo_root / "validation" / ".env", repo_root / ".env"]
-    for c in candidates:
-        if c.exists():
-            load_dotenv(c, override=False)
-
-    if os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").upper() == "TRUE":
-        os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "truthkeeper-hack-2026")
-        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 
 async def _amain() -> int:
@@ -54,7 +39,7 @@ async def _amain() -> int:
     )
     args = parser.parse_args()
 
-    _load_env()
+    load_runtime_env()
 
     if args.rule_id.lower() == "all":
         print(

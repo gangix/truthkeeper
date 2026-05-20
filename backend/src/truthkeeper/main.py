@@ -2,7 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from truthkeeper.api import companies_router
+from truthkeeper.config import load_runtime_env
 from truthkeeper.health import router as health_router
+
+load_runtime_env()
 
 app = FastAPI(
     title="TruthKeeper",
