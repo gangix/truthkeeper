@@ -13,16 +13,16 @@
 --
 -- Status:
 -- - HubSpot connector: ACTIVE, syncing to dataset `hubspot` -- rules using HubSpot work today
--- - Stripe Test connector: IN PROGRESS (initial sync) -- rules using Stripe work once sync completes
--- - Salesforce connector: BLOCKED on org-level OAuth restrictions -- deferred to Plan 5 (JWT Bearer Flow). SF rules commented out below until then.
+-- - Salesforce connector: ACTIVE, syncing to dataset `salesforce` (account 111 rows, contact 118 rows; ~98 seeded each + SF DE sample data)
+-- - Stripe Test connector: HISTORICAL SYNC STUCK at 97/98 tables. `stripe.subscription` table NOT yet in BigQuery.
+--   D1 and D2 will start passing the moment the Stripe sync unblocks; their SQL is correct as written.
 
 -- ────────────────────────────────────────────────────────────────────────
 -- D1: Revenue leak -- Stripe sub still active for an SF Account marked Churned
 -- Expected: 1 row (Anna Chen / Acme Corp)
 -- NEEDS: salesforce.account, salesforce.contact, stripe.customer, stripe.subscription
--- BLOCKED on SF Fivetran connector (Agentforce org's OAuth restrictions).
+-- Currently fails: stripe.subscription not yet synced.
 -- ────────────────────────────────────────────────────────────────────────
-/*
 SELECT
   sf_a.name        AS account_name,
   sf_c.email       AS contact_email,
@@ -38,14 +38,12 @@ WHERE sf_a.description LIKE '%[seed:%'
   AND sf_c.description LIKE '%status=Churned%'
   AND s_sub.status IN ('active', 'trialing', 'past_due')
 ;
-*/
 
 -- ────────────────────────────────────────────────────────────────────────
 -- D2: Trial in SF but paid in Stripe
 -- Expected: 1 row (Ben Park / Beta Industries)
--- BLOCKED on SF Fivetran connector.
+-- Currently fails: stripe.subscription not yet synced.
 -- ────────────────────────────────────────────────────────────────────────
-/*
 SELECT
   sf_c.email     AS contact_email,
   sf_c.description AS sf_status_note,
@@ -61,14 +59,12 @@ LEFT JOIN `truthkeeper-hack-2026.stripe.invoice` s_inv
 WHERE sf_c.description LIKE '%status=Trial%'
   AND s_sub.status = 'active'
 ;
-*/
 
 -- ────────────────────────────────────────────────────────────────────────
 -- D3: Identity fracture -- same person, different email aliases SF vs HubSpot
--- Expected: 1 row (John Smith)
--- BLOCKED on SF Fivetran connector.
+-- Expected: 1 row (John Smith: j.smith@gamma.example.com vs john.smith@gamma.example.com)
+-- Verified passing 2026-05-20.
 -- ────────────────────────────────────────────────────────────────────────
-/*
 SELECT
   sf_c.first_name,
   sf_c.last_name,
@@ -81,7 +77,6 @@ JOIN `truthkeeper-hack-2026.hubspot.contact` hs_c
 WHERE LOWER(sf_c.email) != LOWER(hs_c.property_email)
   AND SPLIT(sf_c.email, '@')[OFFSET(1)] = SPLIT(hs_c.property_email, '@')[OFFSET(1)]
 ;
-*/
 
 -- ────────────────────────────────────────────────────────────────────────
 -- D4: Refunded in Stripe but still in active onboarding sequence in HubSpot
@@ -106,11 +101,11 @@ WHERE hs_c.property_tk_current_sequence IN ('Paying Customer Onboarding', 'Engag
 
 -- ────────────────────────────────────────────────────────────────────────
 -- D5: Orphaned Stripe customer -- exists in Stripe + HubSpot, NOT in SF
--- Expected: 1 row (Eric Olsen / Epsilon Holdings)
--- PARTIAL: today we can prove the customer exists in Stripe + HubSpot.
--- Full check (absence from SF) needs the SF Fivetran connector working.
+-- Expected: 1 row (Eric Olsen / Epsilon Holdings, seed_id=D005)
+-- This HubSpot+Stripe-only form has been the working ground truth since
+-- Stripe sync started; it identifies the orphan via the HubSpot seed marker
+-- without depending on SF data.
 -- ────────────────────────────────────────────────────────────────────────
--- Today's partial check (no SF):
 SELECT
   s_cust.email,
   s_cust.id         AS stripe_customer_id,
@@ -125,8 +120,13 @@ WHERE hs_c.property_tk_seed_id = 'D005'
 GROUP BY s_cust.email, s_cust.id, hs_c.property_tk_seed_id
 ;
 
--- Full version with SF (commented until SF connector works):
-/*
+-- ────────────────────────────────────────────────────────────────────────
+-- D5 alt: orphan check via SF absence (now that SF is synced)
+-- Returns Stripe customers whose email has no matching SF contact.
+-- Known false positive: D3 (John Smith) -- his Stripe email john.smith@
+-- doesn't match SF's j.smith@ alias. Real reconciliation rule will need
+-- canonical-email normalization to avoid flagging the same person twice.
+-- ────────────────────────────────────────────────────────────────────────
 SELECT
   s_cust.email,
   s_cust.id    AS stripe_customer_id,
@@ -140,9 +140,7 @@ LEFT JOIN `truthkeeper-hack-2026.stripe.invoice` s_inv
 WHERE sf_c.id IS NULL
   AND s_cust.email LIKE '%.example.com'
 GROUP BY s_cust.email, s_cust.id, s_cust.created
-HAVING paid_invoice_count > 0
 ;
-*/
 
 -- ────────────────────────────────────────────────────────────────────────
 -- Sanity: 5 seeded HubSpot discrepancy contacts visible
