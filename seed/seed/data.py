@@ -67,6 +67,7 @@ def _build_discrepancies(base: date) -> list[SeedCustomer]:
                 monthly_amount_eur=400,  # 4800/12
                 last_invoice_date=_last_friday(base),
                 invoice_history_months=1,
+                paid_invoice_count=1,  # the paid annual invoice — D2's whole point
             ),
             hubspot=HubSpotPresence(
                 contact_email="ben.park@beta.example.com",
@@ -139,6 +140,7 @@ def _build_discrepancies(base: date) -> list[SeedCustomer]:
                 monthly_amount_eur=199,
                 last_invoice_date=base - timedelta(days=3),
                 invoice_history_months=6,
+                paid_invoice_count=6,  # 6 months of payments — D5's revenue-attribution evidence
             ),
             hubspot=HubSpotPresence(
                 contact_email="eric.olsen@epsilon.example.com",

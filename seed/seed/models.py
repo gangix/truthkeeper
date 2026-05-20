@@ -42,6 +42,7 @@ class StripePresence(BaseModel):
     last_invoice_date: date | None = None
     refunded_last_invoice: bool = False
     invoice_history_months: int = 1  # how many past months to seed
+    paid_invoice_count: int = 0  # how many invoices must reach status=paid
 
 
 class HubSpotPresence(BaseModel):

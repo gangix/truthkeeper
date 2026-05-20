@@ -216,22 +216,31 @@ WHERE sf_a.description LIKE '%[seed:%'
 
 
 D2_SQL = f"""
+WITH latest_paid_invoice_per_subscription AS (
+  SELECT
+    subscription_id,
+    ARRAY_AGG(STRUCT(id, total, created) ORDER BY created DESC LIMIT 1)[OFFSET(0)] AS latest
+  FROM {_bq("stripe", "invoice")}
+  WHERE status = 'paid' AND subscription_id IS NOT NULL
+  GROUP BY subscription_id
+)
 SELECT
-  sf_c.email       AS contact_email,
-  sf_c.description AS sf_status_note,
-  sf_c.id          AS salesforce_contact_id,
-  s_sub.status     AS stripe_subscription_status,
-  s_sub.id         AS stripe_subscription_id,
-  s_inv.total      AS last_stripe_invoice_total,
-  s_inv.id         AS last_stripe_invoice_id
+  sf_c.email             AS contact_email,
+  sf_c.description       AS sf_status_note,
+  sf_c.id                AS salesforce_contact_id,
+  s_sub.status           AS stripe_subscription_status,
+  s_sub.id               AS stripe_subscription_id,
+  lpi.latest.total       AS last_paid_invoice_total_cents,
+  lpi.latest.id          AS last_paid_invoice_id,
+  lpi.latest.created     AS last_paid_invoice_created_at
 FROM {_bq("salesforce", "contact")} sf_c
 JOIN {_bq("stripe", "customer")} s_cust
   ON LOWER(s_cust.email) = LOWER(sf_c.email)
 JOIN {_bq("stripe", "subscription_history")} s_sub
   ON s_sub.customer_id = s_cust.id
  AND s_sub._fivetran_active = TRUE
-LEFT JOIN {_bq("stripe", "invoice")} s_inv
-  ON s_inv.subscription_id = s_sub.id
+JOIN latest_paid_invoice_per_subscription lpi
+  ON lpi.subscription_id = s_sub.id
 WHERE sf_c.description LIKE '%status=Trial%'
   AND s_sub.status = 'active'
 """.strip()
@@ -354,12 +363,15 @@ RULES: list[Rule] = [
         reasoning_template=(
             "An upsell-missed disagreement: {contact_email} is marked Trial in "
             "Salesforce (note: '{sf_status_note}'), but Stripe shows subscription "
-            "{stripe_subscription_id} in status '{stripe_subscription_status}' with "
-            "a recent invoice total of {last_stripe_invoice_total} cents. Likely "
-            "cause: payment succeeded in Stripe but the Salesforce status update "
-            "never propagated. Explain the disagreement in the company's "
-            "vocabulary, surface the monetary impact of the missed upsell motion, "
-            "and present the drafted corrective actions."
+            "{stripe_subscription_id} in status '{stripe_subscription_status}' "
+            "with a paid invoice (id {last_paid_invoice_id}) totalling "
+            "{last_paid_invoice_total_cents} cents. The paid invoice — not just "
+            "the active subscription — is the upsell signal: revenue has "
+            "actually arrived but Sales hasn't been told. Likely cause: payment "
+            "succeeded in Stripe but the Salesforce status update never "
+            "propagated. Explain the disagreement in the company's vocabulary, "
+            "surface the monetary impact of the missed upsell motion, and "
+            "present the drafted corrective actions."
         ),
         corrective_action_templates=[
             CorrectiveActionTemplate(
