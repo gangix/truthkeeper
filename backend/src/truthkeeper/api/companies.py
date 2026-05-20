@@ -1,25 +1,26 @@
 """Company-scoped endpoints: spec lookup and reconciliation pass.
 
-Only one company is wired up in Phase 1 (`truthkeeper-demo`); the
-onboarding flow that produces new CompanyAgentSpec instances lands in
-Phase 2.
+Specs are now persisted in Neon Postgres. On boot, `db.bootstrap.init_db()`
+seeds DEMO_SPEC if the specs table is empty so the live demo URL keeps
+working.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from truthkeeper.db.models import Spec
+from truthkeeper.db.session import get_session
 from truthkeeper.reasoning.orchestrator import reconcile_all_rules
 from truthkeeper.reasoning.output import ReconciliationReport
-from truthkeeper.spec.demo import DEMO_SPEC
 from truthkeeper.spec.models import CompanyAgentSpec
 
 router = APIRouter(prefix="/companies", tags=["companies"])
-
-_SPECS_BY_ID: dict[str, CompanyAgentSpec] = {DEMO_SPEC.company_id: DEMO_SPEC}
 
 
 class ReconcileRequest(BaseModel):
@@ -32,21 +33,24 @@ class ReconcileRequest(BaseModel):
     )
 
 
-def _require_spec(company_id: str) -> CompanyAgentSpec:
-    spec = _SPECS_BY_ID.get(company_id)
-    if spec is None:
+async def _require_spec(company_id: str, session: AsyncSession) -> CompanyAgentSpec:
+    row = (
+        await session.execute(select(Spec).where(Spec.company_id == company_id))
+    ).scalar_one_or_none()
+    if row is None:
         raise HTTPException(
             status_code=404,
-            detail=f"No CompanyAgentSpec registered for company_id={company_id!r}",
+            detail=f"No CompanyAgentSpec persisted for company_id={company_id!r}",
         )
-    return spec
+    return CompanyAgentSpec.model_validate(row.spec_json)
 
 
 @router.get("/{company_id}/spec", response_model=CompanyAgentSpec)
-def get_spec(
+async def get_spec(
     company_id: Annotated[str, Path(description="Company identifier")],
+    session: AsyncSession = Depends(get_session),
 ) -> CompanyAgentSpec:
-    return _require_spec(company_id)
+    return await _require_spec(company_id, session)
 
 
 @router.post(
@@ -64,8 +68,9 @@ async def reconcile(
         ),
     ] = 3,
     body: ReconcileRequest | None = None,
+    session: AsyncSession = Depends(get_session),
 ) -> ReconciliationReport:
-    spec = _require_spec(company_id)
+    spec = await _require_spec(company_id, session)
     rule_ids = body.rule_ids if body and body.rule_ids else None
     return await reconcile_all_rules(
         spec=spec,

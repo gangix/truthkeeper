@@ -1,9 +1,12 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from truthkeeper.api import companies as companies_module
+from truthkeeper.db.models import Spec
+from truthkeeper.db.session import get_session
 from truthkeeper.main import app
 from truthkeeper.reasoning.output import (
     DraftedAction,
@@ -12,12 +15,47 @@ from truthkeeper.reasoning.output import (
     RuleReconciliation,
     ViolationReasoning,
 )
+from truthkeeper.spec.demo import DEMO_SPEC
 from truthkeeper.spec.models import Severity, SystemName
 
-client = TestClient(app)
+
+def _make_mock_session(company_id: str | None) -> AsyncGenerator:
+    """Return an async context-manager-like session stub.
+
+    If company_id is provided the session returns a Spec row for that company;
+    otherwise it returns None (simulating an unknown company).
+    """
+
+    async def _get_session_override() -> AsyncGenerator:
+        mock_session = AsyncMock()
+
+        if company_id is not None:
+            spec_row = MagicMock(spec=Spec)
+            spec_row.company_id = DEMO_SPEC.company_id
+            spec_row.spec_json = DEMO_SPEC.model_dump(mode="json")
+
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = spec_row
+        else:
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = None
+
+        mock_session.execute = AsyncMock(return_value=result)
+        yield mock_session
+
+    return _get_session_override
+
+
+@pytest.fixture(autouse=True)
+def clear_dependency_overrides():
+    """Ensure overrides are cleaned up after each test."""
+    yield
+    app.dependency_overrides.clear()
 
 
 def test_get_spec_returns_demo_company() -> None:
+    app.dependency_overrides[get_session] = _make_mock_session("truthkeeper-demo")
+    client = TestClient(app, raise_server_exceptions=True)
     response = client.get("/companies/truthkeeper-demo/spec")
     assert response.status_code == 200
     payload = response.json()
@@ -28,6 +66,8 @@ def test_get_spec_returns_demo_company() -> None:
 
 
 def test_get_spec_404_for_unknown_company() -> None:
+    app.dependency_overrides[get_session] = _make_mock_session(None)
+    client = TestClient(app, raise_server_exceptions=True)
     response = client.get("/companies/does-not-exist/spec")
     assert response.status_code == 404
     assert "does-not-exist" in response.json()["detail"]
@@ -35,6 +75,9 @@ def test_get_spec_404_for_unknown_company() -> None:
 
 def test_reconcile_endpoint_calls_orchestrator_with_filter(monkeypatch: pytest.MonkeyPatch) -> None:
     """The endpoint must forward path + query + body args to reconcile_all_rules."""
+
+    app.dependency_overrides[get_session] = _make_mock_session("truthkeeper-demo")
+    client = TestClient(app, raise_server_exceptions=True)
 
     captured: dict[str, object] = {}
 
@@ -95,6 +138,9 @@ def test_reconcile_endpoint_calls_orchestrator_with_filter(monkeypatch: pytest.M
 
 
 def test_reconcile_endpoint_accepts_empty_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    app.dependency_overrides[get_session] = _make_mock_session("truthkeeper-demo")
+    client = TestClient(app, raise_server_exceptions=True)
+
     async def stub(spec, *, max_violations_per_rule, rule_ids=None) -> ReconciliationReport:
         return ReconciliationReport(
             company_id=spec.company_id,
@@ -110,5 +156,7 @@ def test_reconcile_endpoint_accepts_empty_body(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_reconcile_endpoint_404_for_unknown_company() -> None:
+    app.dependency_overrides[get_session] = _make_mock_session(None)
+    client = TestClient(app, raise_server_exceptions=True)
     response = client.post("/companies/does-not-exist/reconcile")
     assert response.status_code == 404
