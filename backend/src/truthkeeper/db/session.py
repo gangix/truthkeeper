@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
@@ -30,7 +31,7 @@ _engine = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
-def get_engine():
+def get_engine() -> AsyncEngine:
     global _engine, _sessionmaker
     if _engine is None:
         _engine = create_async_engine(_database_url(), pool_pre_ping=True)
@@ -40,11 +41,12 @@ def get_engine():
 
 def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     get_engine()
-    assert _sessionmaker is not None
+    if _sessionmaker is None:
+        raise RuntimeError("_sessionmaker not initialised; call get_engine() first")
     return _sessionmaker
 
 
-async def get_session() -> AsyncIterator[AsyncSession]:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency that yields an AsyncSession scoped to one request."""
     async with get_sessionmaker()() as session:
         yield session
