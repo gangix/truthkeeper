@@ -53,3 +53,69 @@ export interface CompanyAgentSpec {
   connected_systems: ConnectedSystem[];
   rules: { id: string; name: string; severity: Severity; description: string }[];
 }
+
+// ---- Onboarding (mirrors backend/src/truthkeeper/onboarding/proposal.py + pipeline.py) ----
+
+export interface ProposedEntityMapping {
+  system: SystemName;
+  table: string;
+  id_field: string;
+  email_field?: string | null;
+  status_field?: string | null;
+}
+
+export interface ProposedEntity {
+  proposal_id: string;
+  name: string;
+  mappings: ProposedEntityMapping[];
+}
+
+export interface ProposedCorrectiveActionTemplate {
+  target_system: SystemName;
+  action_type: string;
+  parameter_mapping: Record<string, string>;
+  description: string;
+}
+
+export interface ProposedRule {
+  proposal_id: string;
+  id: string;
+  name: string;
+  description: string;
+  severity: Severity;
+  sql: string;
+  reasoning_template: string;
+  corrective_action_templates: ProposedCorrectiveActionTemplate[];
+  monetary_impact_formula: string | null;
+}
+
+export interface ProposedVocabularyTerm {
+  proposal_id: string;
+  canonical: string;
+  aliases: string[];
+}
+
+export interface OnboardingProposal {
+  proposal_id: string;
+  entities: ProposedEntity[];
+  rules: ProposedRule[];
+  vocabulary: ProposedVocabularyTerm[];
+  source_run_id: string;
+}
+
+export type StageEventStage = "discovery" | "profiling" | "synthesis";
+
+export interface StageEvent {
+  stage: StageEventStage;
+  payload?: { summary?: string } | OnboardingProposal | null;
+  error?: string | null;
+  done: boolean;
+}
+
+export interface ApprovalRequest {
+  proposal_id: string;
+  company_name: string;
+  accepted_entity_ids: string[];
+  accepted_rule_ids: string[];
+  accepted_vocab_ids: string[];
+}

@@ -1,6 +1,9 @@
 import type {
+  ApprovalRequest,
   CompanyAgentSpec,
+  OnboardingProposal,
   ReconciliationReport,
+  StageEvent,
 } from "@/lib/types";
 
 const BACKEND_URL =
@@ -33,6 +36,50 @@ export async function runReconcile(
   if (!res.ok) {
     const detail = await res.text();
     throw new Error(`reconcile failed (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
+export function streamOnboarding(
+  companyId: string = DEMO_COMPANY_ID,
+  onEvent: (event: StageEvent) => void,
+  onError: (err: Error) => void,
+): () => void {
+  const url = `${BACKEND_URL}/companies/${companyId}/onboard/stream`;
+  const es = new EventSource(url);
+  es.onmessage = (msg) => {
+    try {
+      const parsed = JSON.parse(msg.data) as StageEvent;
+      onEvent(parsed);
+      if (parsed.done) es.close();
+    } catch (e) {
+      onError(e as Error);
+      es.close();
+    }
+  };
+  es.onerror = () => {
+    onError(new Error("SSE connection error"));
+    es.close();
+  };
+  return () => es.close();
+}
+
+export async function approveOnboarding(
+  companyId: string,
+  body: ApprovalRequest,
+): Promise<CompanyAgentSpec> {
+  const res = await fetch(
+    `${BACKEND_URL}/companies/${companyId}/onboard/approve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`approve failed (${res.status}): ${detail}`);
   }
   return res.json();
 }
