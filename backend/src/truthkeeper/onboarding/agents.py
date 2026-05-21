@@ -87,9 +87,9 @@ Produce an OnboardingProposal JSON with these fields:
 
 - `proposal_id`: a stable unique string like "prop-<8-char-hex>". Pick any.
 
-- `entities`: ProposedEntity rows that map unified concepts (Customer, Subscription, Invoice, Contact, Deal) to the discovered tables across systems. Use `proposal_id` like "ent-customer", "ent-subscription". Include at least Customer mapping to salesforce.account + stripe.customer + hubspot.company if those tables were found.
+- `entities`: REQUIRED. Always emit at least these five unified entities — Customer, Subscription, Invoice, Contact, Deal — even if profiling could not be completed for every system. Use `proposal_id` like "ent-customer", "ent-subscription", "ent-invoice", "ent-contact", "ent-deal". For each entity, include at least one ProposedEntityMapping for every system you saw in the Discovery summary (salesforce / stripe / hubspot are the canonical three). Best-guess the table + id_field from discovery; do NOT skip an entity just because profiling failed.
 
-- `rules`: Choose which rules from the catalog below to include in the proposal. Emit one ProposedRule per chosen rule. Required fields per emitted ProposedRule:
+- `rules`: REQUIRED. Emit ONE ProposedRule for EVERY rule in the catalog below — all five. Do NOT include a subset; the catalog is the canonical rule set for this company. For each catalog rule, emit:
     * `proposal_id`: "rule-" + the catalog id (e.g. "rule-D1")
     * `id`: the catalog id, copied verbatim (e.g. "D1")
     * `name`, `description`, `severity`: copied verbatim from the catalog

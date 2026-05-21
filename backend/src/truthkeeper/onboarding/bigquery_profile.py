@@ -11,6 +11,7 @@ column is reported as `{cardinality: "high"}` without enumerating values
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from google.adk.tools import FunctionTool
@@ -23,14 +24,22 @@ CARDINALITY_CAP = 50
 TOP_VALUES_LIMIT = 20
 
 
+def _resolve_project() -> str:
+    return os.environ.get("GOOGLE_CLOUD_PROJECT") or _DEFAULT_PROJECT
+
+
 def profile_columns(
     dataset: str,
     table: str,
     columns: list[str],
-    *,
-    project: str = _DEFAULT_PROJECT,
 ) -> dict[str, Any]:
     """Profile each column for distinct values and cardinality.
+
+    Project is read from `GOOGLE_CLOUD_PROJECT` env (falling back to the
+    hardcoded hackathon project) — deliberately NOT a function argument, so
+    the LLM-visible tool schema cannot expose it and the LLM cannot pass an
+    empty string that overrides the default and causes
+    `ProjectId must be non-empty`.
 
     Returns a dict shaped like:
       {
@@ -43,6 +52,7 @@ def profile_columns(
         }
       }
     """
+    project = _resolve_project()
     client = bigquery.Client(project=project)
     out: dict[str, Any] = {"dataset": dataset, "table": table, "columns": {}}
     fq = f"`{project}.{dataset}.{table}`"
