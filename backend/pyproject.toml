@@ -18,6 +18,9 @@ dependencies = [
     "uvicorn[standard]>=0.47.0",
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
+    "stripe>=11.0.0",
+    "simple-salesforce>=1.12.6",
+    "hubspot-api-client>=11.0.0",
 ]
 
 [project.scripts]
