@@ -96,28 +96,34 @@ def _assemble_spec(
         if e.proposal_id in entity_ids
     ]
 
-    rules = [
-        Rule(
-            id=r.id,
-            name=r.name,
-            description=r.description,
-            severity=r.severity,
-            sql=r.sql,
-            reasoning_template=r.reasoning_template,
-            corrective_action_templates=[
-                CorrectiveActionTemplate(
-                    target_system=SystemName(t.target_system),
-                    action_type=t.action_type,
-                    parameter_mapping=t.parameter_mapping,
-                    description=t.description,
-                )
-                for t in r.corrective_action_templates
-            ],
-            monetary_impact_formula=r.monetary_impact_formula,
+    # Rule sql / reasoning_template / corrective_action_templates / monetary_impact_formula
+    # are pinned to DEMO_SPEC by rule id (the SynthesisAgent only chooses which
+    # rule ids to include + emits stubs for the pinned fields, since those
+    # contain `{column_name}` placeholders that ADK's instruction templater
+    # cannot pass through unchanged). We look them up here at approve-time.
+    from truthkeeper.spec.demo import DEMO_SPEC as _DEMO
+
+    _demo_rules_by_id = {dr.id: dr for dr in _DEMO.rules}
+    rules: list[Rule] = []
+    for r in proposal.rules:
+        if r.proposal_id not in rule_ids:
+            continue
+        demo_rule = _demo_rules_by_id.get(r.id)
+        if demo_rule is None:
+            # Agent hallucinated an id; skip it rather than 500.
+            continue
+        rules.append(
+            Rule(
+                id=demo_rule.id,
+                name=demo_rule.name,
+                description=demo_rule.description,
+                severity=demo_rule.severity,
+                sql=demo_rule.sql,
+                reasoning_template=demo_rule.reasoning_template,
+                corrective_action_templates=demo_rule.corrective_action_templates,
+                monetary_impact_formula=demo_rule.monetary_impact_formula,
+            )
         )
-        for r in proposal.rules
-        if r.proposal_id in rule_ids
-    ]
 
     vocab_terms = [
         DomainTerm(canonical=v.canonical, aliases=v.aliases)

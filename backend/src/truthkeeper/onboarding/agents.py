@@ -57,44 +57,26 @@ Skip tables you cannot profile. Do not call the tool more than once per (dataset
 
 
 def _build_synthesis_instruction() -> str:
-    """Build the SynthesisAgent instruction with DEMO_SPEC's rule SQL pinned in.
+    """Build the SynthesisAgent instruction.
 
-    The agent invents entities + vocabulary from its discovery/profiling, but
-    rule SQL strings are taken verbatim from DEMO_SPEC. This prevents Gemini
-    from guessing column names (Fivetran sync uses snake_case; the agent
-    occasionally guesses PascalCase) and producing rules that fire 0
-    violations at reconcile time.
+    The agent invents entities + vocabulary from its discovery/profiling. Rule
+    catalog is exposed read-only (id + headline) so the agent can choose which
+    rules to include; everything else (sql, reasoning_template, action templates,
+    monetary formula) is filled in by `_assemble_spec` from DEMO_SPEC at
+    approve-time via rule-id lookup. This keeps `{column_name}`-style placeholder
+    text out of ADK's instruction-template path, which has its own context
+    variable resolver that does NOT honor Python's `{{...}}` escape.
     """
-    pinned_rules = []
-    for r in DEMO_SPEC.rules:
-        pinned_rules.append(
-            {
-                "id": r.id,
-                "name": r.name,
-                "description": r.description,
-                "severity": r.severity.value,
-                "sql": r.sql,
-                "reasoning_template": r.reasoning_template,
-                "corrective_action_templates": [
-                    {
-                        "target_system": t.target_system.value,
-                        "action_type": t.action_type,
-                        "parameter_mapping": t.parameter_mapping,
-                        "description": t.description,
-                    }
-                    for t in r.corrective_action_templates
-                ],
-                "monetary_impact_formula": r.monetary_impact_formula,
-            }
-        )
-    pinned_rules_json = json.dumps(pinned_rules, indent=2)
-    # DEMO_SPEC.rules.reasoning_template contains literal `{column_name}` style
-    # placeholders that are resolved at reconcile time, not by ADK's instruction
-    # templating. Double the braces so ADK's format() pass treats them as
-    # literal characters; the doubled braces collapse back to single in the
-    # final prompt the LLM sees, and Gemini emits them unchanged into the
-    # proposal's reasoning_template field — where reconcile expects them.
-    pinned_rules_json = pinned_rules_json.replace("{", "{{").replace("}", "}}")
+    rule_catalog = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "description": r.description,
+            "severity": r.severity.value,
+        }
+        for r in DEMO_SPEC.rules
+    ]
+    rule_catalog_json = json.dumps(rule_catalog, indent=2)
 
     return f"""\
 You are the Synthesis sub-agent for TruthKeeper onboarding.
@@ -107,11 +89,19 @@ Produce an OnboardingProposal JSON with these fields:
 
 - `entities`: ProposedEntity rows that map unified concepts (Customer, Subscription, Invoice, Contact, Deal) to the discovered tables across systems. Use `proposal_id` like "ent-customer", "ent-subscription". Include at least Customer mapping to salesforce.account + stripe.customer + hubspot.company if those tables were found.
 
-- `rules`: PINNED. Use the rule list below VERBATIM — copy each rule's `sql`, `reasoning_template`, `corrective_action_templates`, and `monetary_impact_formula` exactly as given. Set each rule's `proposal_id` to "rule-" plus the rule id (e.g. "rule-D1"). Do NOT invent new SQL; do NOT modify the SQL. These SQL strings have been validated against the actual Fivetran-synced BigQuery schema.
+- `rules`: Choose which rules from the catalog below to include in the proposal. Emit one ProposedRule per chosen rule. Required fields per emitted ProposedRule:
+    * `proposal_id`: "rule-" + the catalog id (e.g. "rule-D1")
+    * `id`: the catalog id, copied verbatim (e.g. "D1")
+    * `name`, `description`, `severity`: copied verbatim from the catalog
+    * `sql`: emit empty string ""
+    * `reasoning_template`: emit empty string ""
+    * `corrective_action_templates`: emit empty array []
+    * `monetary_impact_formula`: emit null
+  The system fills the empty fields in deterministically from a pinned source. Do NOT invent rule IDs that aren't in the catalog.
 
-Pinned rules JSON (use verbatim — only set `proposal_id`):
+Rule catalog:
 
-{pinned_rules_json}
+{rule_catalog_json}
 
 - `vocabulary`: ProposedVocabularyTerm rows for the canonical values you saw in profiling — e.g. canonical "Active", aliases the system-specific labels that mean Active.
 
