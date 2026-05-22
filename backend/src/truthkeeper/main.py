@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from truthkeeper.api import companies_router, onboarding_router
+from truthkeeper.api import approvals_router, companies_router, onboarding_router
 from truthkeeper.config import load_runtime_env
 from truthkeeper.db.bootstrap import init_db
 from truthkeeper.health import router as health_router
@@ -45,6 +45,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(companies_router)
 app.include_router(onboarding_router)
+app.include_router(approvals_router)
 
 
 @app.get("/")
