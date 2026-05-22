@@ -99,6 +99,7 @@ def test_reconcile_endpoint_calls_orchestrator_with_filter(monkeypatch: pytest.M
                     sampled_count=1,
                     violations=[
                         ViolationReasoning(
+                            violation_id="test-vid",
                             violation={"k": "v"},
                             reasoning=ReasoningOutput(
                                 explanation="stubbed",

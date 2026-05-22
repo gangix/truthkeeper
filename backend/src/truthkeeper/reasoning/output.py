@@ -79,6 +79,12 @@ class ViolationReasoning(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    violation_id: str = Field(
+        description=(
+            "Stable hash of (rule.id, row) used as the key for per-action "
+            "approvals; see reasoning.orchestrator._violation_id."
+        ),
+    )
     violation: dict[str, Any] = Field(
         description="The original violation row from BigQuery (JSON-friendly)."
     )
