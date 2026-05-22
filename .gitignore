@@ -55,3 +55,4 @@ yarn-error.log*
 # GCP credentials
 gcloud-key.json
 service-account*.json
+.vercel

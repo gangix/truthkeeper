@@ -39,3 +39,6 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.vercel]
+entrypoint = "src.truthkeeper.main:app"
