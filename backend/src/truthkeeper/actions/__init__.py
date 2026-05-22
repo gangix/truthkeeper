@@ -6,6 +6,10 @@ approve endpoint; result.py defines the shared ExecutionResult shape; each
 that system.
 """
 
+from truthkeeper.actions.dispatch import (
+    UnsupportedActionError,
+    dispatch_action,
+)
 from truthkeeper.actions.result import ExecutionResult
 
-__all__ = ["ExecutionResult"]
+__all__ = ["ExecutionResult", "UnsupportedActionError", "dispatch_action"]
