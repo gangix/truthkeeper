@@ -1,5 +1,7 @@
 import type {
   ApprovalRequest,
+  ApprovalResponse,
+  ApprovalSummary,
   CompanyAgentSpec,
   OnboardingProposal,
   ReconciliationReport,
@@ -80,6 +82,40 @@ export async function approveOnboarding(
   if (!res.ok) {
     const detail = await res.text();
     throw new Error(`approve failed (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
+export async function approveAction(
+  companyId: string,
+  violationId: string,
+  actionIdx: number,
+): Promise<ApprovalResponse> {
+  const res = await fetch(
+    `${BACKEND_URL}/companies/${companyId}/disagreements/${violationId}/actions/${actionIdx}/approve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`approve failed (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
+export async function getApprovalsByViolation(
+  companyId: string,
+  violationId: string,
+): Promise<ApprovalSummary[]> {
+  const res = await fetch(
+    `${BACKEND_URL}/companies/${companyId}/approvals/by-violation/${violationId}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) {
+    throw new Error(`approval history fetch failed (${res.status})`);
   }
   return res.json();
 }

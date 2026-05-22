@@ -22,6 +22,7 @@ export interface ReasoningOutput {
 }
 
 export interface ViolationReasoning {
+  violation_id: string;
   violation: Record<string, unknown>;
   reasoning: ReasoningOutput;
 }
@@ -118,4 +119,30 @@ export interface ApprovalRequest {
   accepted_entity_ids: string[];
   accepted_rule_ids: string[];
   accepted_vocab_ids: string[];
+}
+
+// ---- Approvals (mirrors backend/src/truthkeeper/api/approvals.py) ----
+
+export interface ExecutionResult {
+  status: "succeeded" | "failed";
+  external_id: string | null;
+  message: string;
+  error: string | null;
+}
+
+export interface ApprovalResponse {
+  execution_result: ExecutionResult;
+  approval_id: string;
+}
+
+export interface ApprovalSummary {
+  approval_id: string;
+  action_idx: number;
+  target_system: SystemName;
+  action_type: string;
+  status: "succeeded" | "failed";
+  external_id: string | null;
+  message: string;
+  error: string | null;
+  executed_at: string;
 }
