@@ -79,7 +79,7 @@ export function ViolationDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[min(96vw,80rem)] max-h-[92vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] sm:max-w-7xl max-h-[92vh] overflow-y-auto">
         <DialogHeader className="space-y-3">
           <div className="flex items-center gap-3">
             <span className="rounded-md bg-muted px-2 py-1 text-xs font-mono">
