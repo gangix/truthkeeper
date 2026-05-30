@@ -1,0 +1,29 @@
+.gcloudignore
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# Local
+*.env
+.env.*
+validation/
+docs/
