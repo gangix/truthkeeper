@@ -21,6 +21,7 @@ dependencies = [
     "stripe>=11.0.0",
     "simple-salesforce>=1.12.6",
     "hubspot-api-client>=11.0.0",
+    "pyjwt[crypto]>=2.10.0",
 ]
 
 [project.scripts]

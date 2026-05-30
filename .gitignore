@@ -56,3 +56,8 @@ yarn-error.log*
 gcloud-key.json
 service-account*.json
 .vercel
+
+# Salesforce JWT keypair (private key + cert, kept local)
+validation/sf_jwt_key.pem
+validation/sf_jwt_cert.pem
+validation/sf_jwt_key.b64

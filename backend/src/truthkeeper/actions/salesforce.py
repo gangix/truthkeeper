@@ -1,7 +1,9 @@
 """Salesforce action executor: update_account_status.
 
-Uses simple-salesforce. Authenticates via OAuth Username-Password flow
-(matches the existing seed/Salesforce_client pattern).
+Auth: OAuth 2.0 JWT Bearer flow via an External Client App with Digital
+Signatures. The username-password OAuth flow is blocked by default on
+Agentforce / Summer '23+ orgs, so we sign a JWT assertion with our
+private key and exchange it for an access token.
 
 Status-field name handling: the rule's parameter_mapping uses "new_status"
 to provide the target value. The SF field name itself (`Status__c` custom
@@ -12,10 +14,15 @@ session.
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import os
+import time
 from functools import lru_cache
+from pathlib import Path
 
+import jwt
+import requests
 from simple_salesforce import Salesforce
 
 from truthkeeper.actions.result import ExecutionResult
@@ -25,18 +32,26 @@ logger = logging.getLogger(__name__)
 _STATUS_FIELD_CANDIDATES = ("Status__c", "Status", "Account_Status__c")
 
 
-def _required_env() -> dict[str, str]:
-    keys = (
-        "SF_USERNAME",
-        "SF_PASSWORD",
-        "SF_SECURITY_TOKEN",
-        "SF_CONSUMER_KEY",
-        "SF_CONSUMER_SECRET",
+def _load_private_key() -> str:
+    """Resolve the JWT private key from one of three env-var forms."""
+    if pem := os.environ.get("SF_JWT_PRIVATE_KEY"):
+        return pem
+    if b64 := os.environ.get("SF_JWT_PRIVATE_KEY_B64"):
+        return base64.b64decode(b64).decode("utf-8")
+    if path := os.environ.get("SF_JWT_PRIVATE_KEY_PATH"):
+        return Path(path).read_text()
+    raise RuntimeError(
+        "JWT auth selected but no private key found. Set one of: "
+        "SF_JWT_PRIVATE_KEY, SF_JWT_PRIVATE_KEY_B64, SF_JWT_PRIVATE_KEY_PATH."
     )
+
+
+def _required_jwt_env() -> dict[str, str]:
+    keys = ("SF_USERNAME", "SF_JWT_CONSUMER_KEY", "SF_LOGIN_HOST")
     missing = [k for k in keys if not os.environ.get(k)]
     if missing:
         raise RuntimeError(
-            f"Salesforce credentials missing: {', '.join(missing)}. "
+            f"Salesforce JWT credentials missing: {', '.join(missing)}. "
             "Add to validation/.env (local) or Cloud Run env (prod)."
         )
     return {k: os.environ[k] for k in keys}
@@ -44,13 +59,38 @@ def _required_env() -> dict[str, str]:
 
 @lru_cache(maxsize=1)
 def _client() -> Salesforce:
-    env = _required_env()
+    env = _required_jwt_env()
+    audience = f"https://{env['SF_LOGIN_HOST']}"
+    token_url = f"{audience}/services/oauth2/token"
+
+    now = int(time.time())
+    assertion = jwt.encode(
+        {
+            "iss": env["SF_JWT_CONSUMER_KEY"],
+            "sub": env["SF_USERNAME"],
+            "aud": audience,
+            "exp": now + 180,
+        },
+        _load_private_key(),
+        algorithm="RS256",
+    )
+
+    response = requests.post(
+        token_url,
+        data={
+            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            "assertion": assertion,
+        },
+        timeout=30,
+    )
+    if not response.ok:
+        raise RuntimeError(
+            f"JWT auth failed: {response.status_code} {response.text[:500]}"
+        )
+    payload = response.json()
     return Salesforce(
-        username=env["SF_USERNAME"],
-        password=env["SF_PASSWORD"],
-        security_token=env["SF_SECURITY_TOKEN"],
-        consumer_key=env["SF_CONSUMER_KEY"],
-        consumer_secret=env["SF_CONSUMER_SECRET"],
+        instance_url=payload["instance_url"],
+        session_id=payload["access_token"],
     )
 
 
